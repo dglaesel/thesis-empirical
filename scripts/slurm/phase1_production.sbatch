@@ -16,10 +16,10 @@
 set -euo pipefail
 
 # --- HPC environment ---
-module load devel/python/3.12
 WS_NAME=${WS_NAME:-thesis}
 PROJECT_DIR="$(ws_find ${WS_NAME})/empiricalstudy_clean"
 cd "${PROJECT_DIR}"
+module load "$(cat .python_module)"
 source venv/bin/activate
 
 export OMP_NUM_THREADS=1

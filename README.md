@@ -55,7 +55,7 @@ cd $(ws_find thesis)/empiricalstudy_clean
 bash setup_hpc.sh
 ```
 
-This loads `devel/python/3.12`, creates a venv, installs all dependencies, and verifies `iisignature` + `logsigjoin`.
+This auto-detects the best Python module (prefers 3.11 for `logsigjoin` compatibility), creates a venv, installs all dependencies, and verifies `iisignature` + `logsigjoin`. To override: `PYTHON_MODULE=devel/python/3.11 bash setup_hpc.sh`
 
 ### Step 5: Preflight check (on a compute node)
 
@@ -124,7 +124,7 @@ cat results/slurm/train_*.out  # Phase 2 training output
 
 ```bash
 cd $(ws_find thesis)/empiricalstudy_clean
-module load devel/python/3.12
+module load "$(cat .python_module)"
 source venv/bin/activate
 
 # Phase 1: aggregate + plot
@@ -166,13 +166,24 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-## Note on iisignature
+## Note on iisignature and Python version
 
-Version 0.24 is required for `logsigjoin` (incremental log-signature computation). If `pip install` fails, ensure GCC and NumPy headers are available:
+Version 0.24 is required for `logsigjoin` (incremental log-signature computation). **`logsigjoin` compiles correctly on Python 3.11 but NOT on Python 3.12** (known build issue). The setup script auto-detects and prefers Python 3.11.
+
+If `pip install` fails, ensure GCC and NumPy headers are available:
 
 ```bash
-module load devel/python/3.12   # provides numpy headers
+module load devel/python/3.11   # provides numpy headers + logsigjoin compatibility
 module load compiler/gnu        # provides GCC (if not already loaded)
+```
+
+After setup, verify on the login node:
+
+```bash
+cd $(ws_find thesis)/empiricalstudy_clean
+module load "$(cat .python_module)"
+source venv/bin/activate
+python -c "import iisignature; print('logsigjoin:', hasattr(iisignature, 'logsigjoin'))"
 ```
 
 ## Configuration

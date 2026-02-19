@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .venv*/
 env/
+.python_module
 .vscode/
 .idea/
 *.swp
