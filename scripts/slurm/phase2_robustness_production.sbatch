@@ -3,8 +3,8 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=96
-#SBATCH --mem=350G
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=64G
 #SBATCH --time=04:00:00
 #SBATCH --output=results/slurm/robustness_%j.out
 #SBATCH --error=results/slurm/robustness_%j.err

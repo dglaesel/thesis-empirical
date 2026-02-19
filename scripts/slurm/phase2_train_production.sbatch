@@ -3,8 +3,8 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=96
-#SBATCH --mem=350G
+#SBATCH --cpus-per-task=90
+#SBATCH --mem=128G
 #SBATCH --time=12:00:00
 #SBATCH --output=results/slurm/train_%j.out
 #SBATCH --error=results/slurm/train_%j.err
