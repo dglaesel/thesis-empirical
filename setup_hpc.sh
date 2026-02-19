@@ -31,7 +31,8 @@ source venv/bin/activate
 
 echo "Installing dependencies..."
 pip install --upgrade pip
-pip install numpy                   # iisignature build requires numpy at compile time
+pip install numpy setuptools        # iisignature build requires numpy + setuptools at compile time
+pip install --no-build-isolation iisignature==0.24   # must see numpy in the venv
 pip install -r requirements.txt
 
 # Verify critical packages
