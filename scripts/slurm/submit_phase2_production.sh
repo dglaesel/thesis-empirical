@@ -5,7 +5,7 @@
 #   3. (optional) robustness check (~2h, independent)
 #
 # Run from the project root inside your workspace:
-#   cd $(ws_find thesis)/empiricalstudy_clean
+#   cd $(ws_find thesis)/thesis-empirical
 #   bash scripts/slurm/submit_phase2_production.sh
 #
 # To also run robustness:

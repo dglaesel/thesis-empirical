@@ -1,31 +1,21 @@
 #!/bin/bash
 # Setup Python environment on bwUniCluster 3.0.
 # Run this from the project root inside your workspace:
-#   cd $(ws_find thesis)/empiricalstudy_clean
+#   cd $(ws_find thesis)/thesis-empirical
 #   bash setup_hpc.sh
 #
 # IMPORTANT: iisignature==0.24 logsigjoin only compiles correctly on Python 3.11.
 # Python 3.12 builds iisignature but is MISSING logsigjoin (critical for O(K) logsig).
-# Override with:  PYTHON_MODULE=devel/python/3.12 bash setup_hpc.sh
+# Override with:  PYTHON_MODULE=devel/python/3.12.3-gnu-14.2 bash setup_hpc.sh
 set -euo pipefail
 
 # --- Detect Python module ---
-PYTHON_MODULE=${PYTHON_MODULE:-""}
-
-if [[ -z "${PYTHON_MODULE}" ]]; then
-  # Try 3.11 first (logsigjoin works), fall back to 3.12
-  if module avail devel/python/3.11 2>&1 | grep -q "devel/python/3.11"; then
-    PYTHON_MODULE="devel/python/3.11"
-  elif module avail devel/python/3.12 2>&1 | grep -q "devel/python/3.12"; then
-    PYTHON_MODULE="devel/python/3.12"
-    echo "WARNING: Python 3.11 not found, using 3.12."
-    echo "         logsigjoin may NOT be available — setup will verify."
-  else
-    echo "ERROR: Neither devel/python/3.11 nor devel/python/3.12 found."
-    echo "       Check available modules with: module avail devel/python"
-    exit 1
-  fi
-fi
+# bwUniCluster 3.0 available (as of Feb 2026):
+#   devel/python/3.11.7-gnu-11.4   devel/python/3.11.7-gnu-14.2
+#   devel/python/3.12.3-gnu-11.4   devel/python/3.12.3-gnu-14.2 (D)
+#   devel/python/3.13.1-*          devel/python/3.13.3-*
+# We need 3.11 for logsigjoin compatibility.
+PYTHON_MODULE=${PYTHON_MODULE:-"devel/python/3.11.7-gnu-14.2"}
 
 echo "Using module: ${PYTHON_MODULE}"
 module load "${PYTHON_MODULE}"

@@ -2,7 +2,7 @@
 # Submit ALL production jobs: Phase 1 + Phase 2 (+ optional robustness).
 #
 # Run from the project root inside your workspace:
-#   cd $(ws_find thesis)/empiricalstudy_clean
+#   cd $(ws_find thesis)/thesis-empirical
 #   bash scripts/slurm/submit_all_production.sh
 #
 # Optional env vars:

@@ -12,7 +12,7 @@ Companion code for the empirical study in Chapters 5 and 7:
 ### Step 1: Log in
 
 ```bash
-ssh <username>@uc3.scc.kit.edu
+ssh ma_dglaesel@uc3.scc.kit.edu
 ```
 
 ### Step 2: Create a workspace (60 days, extendable to 240)
@@ -35,23 +35,26 @@ ws_extend thesis 30
 
 ### Step 3: Upload the code
 
-From your **local machine**:
-
-```bash
-scp -r empiricalstudy_clean/ <username>@uc3.scc.kit.edu:$(ssh <username>@uc3.scc.kit.edu 'ws_find thesis')/
-```
-
-Or on the cluster, if the code is in a git repo:
+Clone the GitHub repo on the cluster:
 
 ```bash
 cd $(ws_find thesis)
-git clone <your-repo-url> empiricalstudy_clean
+git clone <your-repo-url> thesis-empirical
 ```
+
+Or from your **local machine** (to sync local changes):
+
+```bash
+rsync -avz --exclude='.git' --exclude='__pycache__' --exclude='.pytest_cache' \
+  empiricalstudy_clean/ ma_dglaesel@uc3.scc.kit.edu:<WS_PATH>/thesis-empirical/
+```
+
+(Get `<WS_PATH>` by running `ws_find thesis` on the cluster.)
 
 ### Step 4: Set up the Python environment
 
 ```bash
-cd $(ws_find thesis)/empiricalstudy_clean
+cd $(ws_find thesis)/thesis-empirical
 bash setup_hpc.sh
 ```
 
@@ -60,7 +63,7 @@ This auto-detects the best Python module (prefers 3.11 for `logsigjoin` compatib
 ### Step 5: Preflight check (on a compute node)
 
 ```bash
-cd $(ws_find thesis)/empiricalstudy_clean
+cd $(ws_find thesis)/thesis-empirical
 sbatch scripts/slurm/preflight_phase2_cpu.sbatch
 ```
 
@@ -77,7 +80,7 @@ You should see `ALL CHECKS PASSED`.
 Navigate to the project directory first:
 
 ```bash
-cd $(ws_find thesis)/empiricalstudy_clean
+cd $(ws_find thesis)/thesis-empirical
 ```
 
 **Option A — Everything at once:**
@@ -123,7 +126,7 @@ cat results/slurm/train_*.out  # Phase 2 training output
 ### Step 8: Post-run analysis
 
 ```bash
-cd $(ws_find thesis)/empiricalstudy_clean
+cd $(ws_find thesis)/thesis-empirical
 module load "$(cat .python_module)"
 source venv/bin/activate
 
@@ -180,7 +183,7 @@ module load compiler/gnu        # provides GCC (if not already loaded)
 After setup, verify on the login node:
 
 ```bash
-cd $(ws_find thesis)/empiricalstudy_clean
+cd $(ws_find thesis)/thesis-empirical
 module load "$(cat .python_module)"
 source venv/bin/activate
 python -c "import iisignature; print('logsigjoin:', hasattr(iisignature, 'logsigjoin'))"
