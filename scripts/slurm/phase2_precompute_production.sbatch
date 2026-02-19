@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=76
-#SBATCH --mem=160G
+#SBATCH --mem=300G
 #SBATCH --time=02:00:00
 #SBATCH --output=results/slurm/precompute_%j.out
 #SBATCH --error=results/slurm/precompute_%j.err
