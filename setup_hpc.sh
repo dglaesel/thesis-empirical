@@ -4,8 +4,8 @@
 #   cd $(ws_find thesis)/thesis-empirical
 #   bash setup_hpc.sh
 #
-# IMPORTANT: iisignature==0.24 logsigjoin only compiles correctly on Python 3.11.
-# Python 3.12 builds iisignature but is MISSING logsigjoin (critical for O(K) logsig).
+# IMPORTANT: logsigjoin was added to iisignature AFTER the 0.24 PyPI release (Dec 2019).
+# The PyPI tarball does NOT have logsigjoin. We install from git (pinned commit).
 #
 # If something goes wrong:
 #   rm -rf venv .python_module
@@ -14,11 +14,12 @@ set -euo pipefail
 
 # --- Module configuration ---
 # bwUniCluster 3.0 available (as of Feb 2026):
-#   devel/python/3.11.7-gnu-11.4   devel/python/3.11.7-gnu-14.2
-#   devel/python/3.12.3-gnu-11.4   devel/python/3.12.3-gnu-14.2 (D)
-# We need 3.11 for logsigjoin compatibility.
+#   devel/python/3.11.7-gnu-{11.4,14.2}
+#   devel/python/3.12.3-gnu-{11.4,14.2} (D)
+#   devel/python/3.13.{1,3}-*
+# Using 3.12 (cluster default).
 COMPILER_MODULE=${COMPILER_MODULE:-"compiler/gnu/14.2"}
-PYTHON_MODULE=${PYTHON_MODULE:-"devel/python/3.11.7-gnu-14.2"}
+PYTHON_MODULE=${PYTHON_MODULE:-"devel/python/3.12.3-gnu-14.2"}
 
 echo "============================================"
 echo " Loading modules"
@@ -56,12 +57,13 @@ pip install --upgrade pip setuptools wheel
 #         pyproject.toml build-system.requires. So build isolation fails.
 pip install "numpy>=1.17"
 
-# Step 3: Build iisignature from source with --no-build-isolation
-#         so it sees the numpy and setuptools we just installed.
-#         This compiles src/pythonsigs.cpp with -std=c++14.
+# Step 3: Build iisignature from git (post-0.24, includes logsigjoin).
+#         The 0.24 PyPI tarball does NOT have logsigjoin — it was added in 2023.
+#         Pinned to the same commit used in development (ee9c1ec).
+#         --no-build-isolation so it sees the numpy we just installed.
 echo ""
-echo "Building iisignature==0.24 from source (C++14 extension)..."
-pip install --no-build-isolation iisignature==0.24
+echo "Building iisignature from git (C++14 extension, includes logsigjoin)..."
+pip install --no-build-isolation "iisignature @ git+https://github.com/bottler/iisignature.git@ee9c1ec3a5fde539e854b7e8a3fb92195b506817"
 
 # Step 4: Install remaining dependencies (torch, scipy, etc.)
 pip install -r requirements.txt
@@ -97,10 +99,10 @@ if not has_lsj:
     print('       logsigjoin is required for O(K) incremental log-signature computation.')
     print('       Without it, precompute uses O(K^2) fallback — far too slow for production.')
     print()
-    print('       This is a known issue with iisignature 0.24 on Python >= 3.12.')
-    print('       You are running Python', sys.version.split()[0])
-    print('       Fix: rm -rf venv .python_module')
-    print('            PYTHON_MODULE=devel/python/3.11.7-gnu-14.2 bash setup_hpc.sh')
+    print('       logsigjoin was added after the 0.24 PyPI release.')
+    print('       It must be installed from git, not PyPI.')
+    print('       Fix: rm -rf venv .python_module .compiler_module')
+    print('            bash setup_hpc.sh')
     sys.exit(1)
 
 # --- Functional test ---

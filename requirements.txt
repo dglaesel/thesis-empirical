@@ -1,5 +1,5 @@
 torch>=2.0
-iisignature==0.24
+iisignature @ git+https://github.com/bottler/iisignature.git@ee9c1ec3a5fde539e854b7e8a3fb92195b506817
 numpy
 scipy
 matplotlib

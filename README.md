@@ -169,22 +169,15 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-## Note on iisignature and Python version
+## Note on iisignature
 
-Version 0.24 is required for `logsigjoin` (incremental log-signature computation). **`logsigjoin` compiles correctly on Python 3.11 but NOT on Python 3.12** (known build issue). The setup script auto-detects and prefers Python 3.11.
+`logsigjoin` (incremental log-signature computation) was added to iisignature **after** the 0.24 PyPI release (Dec 2019). The PyPI tarball does NOT include it. We install from a pinned git commit instead. The setup script handles this automatically.
 
-If `pip install` fails, ensure GCC and NumPy headers are available:
-
-```bash
-module load devel/python/3.11   # provides numpy headers + logsigjoin compatibility
-module load compiler/gnu        # provides GCC (if not already loaded)
-```
-
-After setup, verify on the login node:
+After setup, verify:
 
 ```bash
 cd $(ws_find thesis)/thesis-empirical
-module load "$(cat .python_module)"
+module load "$(cat .compiler_module)" "$(cat .python_module)"
 source venv/bin/activate
 python -c "import iisignature; print('logsigjoin:', hasattr(iisignature, 'logsigjoin'))"
 ```
