@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=96
-#SBATCH --mem=384G
+#SBATCH --mem=350G
 #SBATCH --time=12:00:00
 #SBATCH --output=results/slurm/train_%j.out
 #SBATCH --error=results/slurm/train_%j.err
