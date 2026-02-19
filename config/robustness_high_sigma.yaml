@@ -1,0 +1,62 @@
+# Robustness check: doubled baseline volatility (sigma_min = 0.20 vs default 0.10)
+# Subset grid: H in {0.125, 0.375}, N in {2, 4}, seeds 0-2, L1 only, A_dnn
+
+# Top-level keys inherited from default.yaml (phase2_train reads these)
+T: 1.0
+K: 500
+v_bar: 5.0
+alpha: 10.0
+phi: 0.1
+eta: 0.01
+Q_0: 0.0
+Z_0: 0.0
+
+phase2:
+  enabled: true
+  levels: ["L1"]
+  split_mode: "index"
+  train_frac: 0.8
+  val_frac_of_train: 0.2
+  split_seed_offset: 12345
+  m_max: 4
+  iisignature_method: "O"
+  feature_dtype: "float32"
+  integrator_L1: "exact"
+  integrator_L2L3: "milstein"
+  manifest_path: "results/run_manifest.txt"
+  output_root: "results/phase2"
+  features_root: "results/phase2/features"
+  runs_root: "results/phase2/runs"
+  H_values: [0.125, 0.375]
+  N_values: [2, 4]
+  seeds: [0, 1, 2]
+  architectures: ["A_dnn"]
+  M: 131072
+  batch_size: 4096
+  eval_batch_size: 4096
+  num_epochs: 1500
+  learning_rate: 1.0e-3
+  grad_clip: 1.0
+  eval_every: 20
+  lr_patience: 15
+  lr_factor: 0.5
+  lr_cooldown: 5
+  lr_min: 1.0e-5
+
+  spread_params:
+    sigma_min: 0.20                         # <-- PERTURBED (default: 0.10)
+    kappa0: 10.0
+    mu: 0.0
+    delta_sigma: 0.15
+    delta_kappa: 15.0
+    k_sigma: 1.5
+    k_kappa: 1.5
+
+  baseline:
+    q_target: 1.0
+    ou_cz_grid: [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
+    ou_cq_grid: [0.0, 0.1, 0.25, 0.5, 1.0, 2.0]
+    zscore_entry_grid: [1.0, 1.5, 2.0]
+    zscore_exit_grid: [0.25, 0.5, 0.75]
+
+device: "cpu"

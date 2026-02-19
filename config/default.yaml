@@ -1,0 +1,140 @@
+# Default configuration for signature-based pairs trading
+# See context/strategy_spec.md for full details
+
+# --- Spread dynamics (fractional Ornstein-Uhlenbeck) ---
+kappa: 5.0        # mean-reversion speed
+mu: 0.0           # long-run spread mean
+sigma: 0.3        # volatility
+
+# --- Simulation ---
+T: 1.0            # trading horizon (years)
+K: 500            # number of time steps
+M: 16384          # number of Monte Carlo paths (for pre-computation)
+batch_size: 4096  # training batch size
+
+# --- Trading constraints ---
+v_bar: 5.0        # max trading rate
+
+# --- Objective penalties ---
+alpha: 10.0       # terminal liquidation penalty
+phi: 0.1          # running inventory penalty
+eta: 0.01         # market impact parameter
+
+# --- Initial conditions ---
+Q_0: 0.0          # initial inventory
+Z_0: 0.0          # initial spread (= mu)
+
+# --- Hurst parameter grid ---
+H_grid: [0.125, 0.25, 0.375, 0.5, 0.75]
+
+# --- Signature truncation grid ---
+N_grid: [1, 2, 3, 4, 5]
+
+# --- Training ---
+num_epochs: 500
+learning_rate: 1.0e-3
+grad_clip: 1.0
+seed: 42
+
+# --- Phase 1 (1D tracking problem — Bank et al. Table 1 reproduction) ---
+# Cost: L(Y,U) = 1/2 * integral(Y^2 + kappa*U^2) dt
+phase1:
+  kappa: 0.1
+  T: 1.0
+  K: 1000                # dt = 10^-3 (matches Bank et al.)
+  M: 131072              # 2^17 — compromise between Bank's 2^19 and memory limits
+                          # Bank et al. use M=2^19=524288. At N=5 (dim=14) with K=1000,
+                          # the logsig tensor alone is M*1001*14*4 bytes.
+                          # At M=2^19 that's ~29 GB. We use M=2^17 (~7 GB).
+                          # If OOM, reduce to M=2^16=65536 (~3.7 GB).
+  batch_size: 8192
+  num_epochs: 500
+  learning_rate: 1.0e-3
+  H_values: [0.25, 0.5, 0.75]
+  N_values: [1, 2, 3, 4, 5]
+
+# --- Phase 1 Bank-faithful (closed-loop, on-the-fly signatures) ---
+phase1_bank:
+  train_data_mode: "stream" # "stream" (low RAM) or "preload" (original Bank-style preload)
+  batch_size: 512
+  n_batches: 1024          # reduce to 256 if OOM (MC_train = batch_size * n_batches)
+  learning_rate: 0.1
+  base_epochs: 31          # total epochs = base_epochs + N * epochs_per_N
+  epochs_per_N: 10
+  restarts: 3
+  steps_per_restart: 3
+  mc_eval: 262144          # 2^18 for evaluation (Bank uses 2^20)
+  validation_size: 131072
+  sig_comp: "tY"
+
+# --- Phase 2 (3D pairs-trading control, Chapter 6 theory) ---
+phase2:
+  enabled: true
+  levels: ["L1", "L2", "L3"]               # all three comparison levels
+  split_mode: "index"                     # "index" (single pool + index split) or "independent"
+  train_frac: 0.8
+  val_frac_of_train: 0.2                   # fraction of training pool held out for validation
+  split_seed_offset: 12345
+  m_max: 4
+  iisignature_method: "O"
+  feature_dtype: "float32"
+  integrator_L1: "exact"                  # exact convolution for constant coefficients
+  integrator_L2L3: "milstein"             # Milstein for state-dependent coefficients
+  manifest_path: "results/run_manifest.txt"
+  output_root: "results/phase2"
+  features_root: "results/phase2/features"
+  runs_root: "results/phase2/runs"
+  H_values: [0.125, 0.25, 0.375, 0.5, 0.75]
+  N_values: [1, 2, 3, 4]
+  seeds: [0, 1, 2, 3, 4]
+  architectures: ["A_lin", "A_dnn"]
+  M: 131072
+  batch_size: 4096
+  eval_batch_size: 4096
+  num_epochs: 1500
+  learning_rate: 1.0e-3
+  grad_clip: 1.0
+  eval_every: 20
+  lr_patience: 15
+  lr_factor: 0.5
+  lr_cooldown: 5
+  lr_min: 1.0e-5
+
+  # Spread dynamics parameters (Chapter 6):
+  #   sigma(z) = sigma_min + delta_sigma * tanh(beta * (z - mu)^2)
+  #   kappa(z) = kappa0   + delta_kappa * (1 - exp(-gamma_k * (z - mu)^2))
+  spread_params:
+    sigma_min: 0.10                       # baseline volatility
+    kappa0: 10.0                          # baseline mean-reversion speed
+    mu: 0.0                               # equilibrium spread
+    delta_sigma: 0.15                     # sigma_max = 0.25 (for L2, L3)
+    delta_kappa: 15.0                     # kappa_max = 25.0 (for L2, L3)
+    k_sigma: 1.5                          # activation at 1.5 s.d.
+    k_kappa: 1.5                          # activation at 1.5 s.d.
+
+  # Baseline tuning grids (Phase 2)
+  baseline:
+    q_target: 1.0
+    ou_cz_grid: [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
+    ou_cq_grid: [0.0, 0.1, 0.25, 0.5, 1.0, 2.0]
+    zscore_entry_grid: [1.0, 1.5, 2.0]
+    zscore_exit_grid: [0.25, 0.5, 0.75]
+
+# --- Robustness check (perturbed parameters, subset of H grid) ---
+robustness:
+  enabled: false                            # set true for robustness sweep
+  H_values: [0.125, 0.375]                 # most interesting anti-persistent regimes
+  N_values: [2, 4]                          # representative truncation levels
+  seeds: [0, 1, 2]                          # fewer seeds for secondary analysis
+  levels: ["L1"]                            # constant coefficients only
+  architectures: ["A_dnn"]
+  perturbations:
+    - label: "low_kappa"
+      spread_params:
+        kappa0: 5.0                         # halved mean-reversion (default 10)
+    - label: "high_sigma"
+      spread_params:
+        sigma_min: 0.20                     # doubled baseline vol (default 0.10)
+
+# --- Device ---
+device: "auto"  # "auto", "cpu", or "cuda"
