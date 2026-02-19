@@ -17,6 +17,7 @@ set -euo pipefail
 WS_NAME=${WS_NAME:-thesis}
 PROJECT_DIR="$(ws_find ${WS_NAME})/thesis-empirical"
 cd "${PROJECT_DIR}"
+module load "$(cat .compiler_module)"
 module load "$(cat .python_module)"
 source venv/bin/activate
 

@@ -5,6 +5,7 @@ venv/
 .venv*/
 env/
 .python_module
+.compiler_module
 .vscode/
 .idea/
 *.swp
