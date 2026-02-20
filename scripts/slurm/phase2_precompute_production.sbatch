@@ -3,14 +3,14 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=10
 #SBATCH --mem=100G
 #SBATCH --time=02:00:00
 #SBATCH --output=results/slurm/precompute_%j.out
 #SBATCH --error=results/slurm/precompute_%j.err
 
 # Phase 2 precompute — all (level, H, seed) combinations.
-# Each Python process is single-threaded (~3.4 GB each); 15 concurrent.
+# Each Python process is single-threaded (~6-7 GB each); 8 concurrent.
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ export NUMEXPR_NUM_THREADS=1
 CONFIG_PATH=${CONFIG_PATH:-config/default.yaml}
 RUN_ID=${RUN_ID:?ERROR: set RUN_ID before submitting}
 SPLIT_MODE=${SPLIT_MODE:-index}
-MAX_PARALLEL=${MAX_PARALLEL:-15}
+MAX_PARALLEL=${MAX_PARALLEL:-8}
 
 mkdir -p results/slurm results/phase2
 
