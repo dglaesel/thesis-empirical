@@ -35,6 +35,7 @@ class Phase2Params:
     alpha: float
     phi: float
     eta: float
+    c: float               # proportional transaction cost (bid-ask half-spread)
     v_bar: float
     Q0: float
 
@@ -136,6 +137,7 @@ def build_phase2_params(config: dict, level: str, H: float) -> Phase2Params:
         alpha=float(config["alpha"]),
         phi=float(config["phi"]),
         eta=float(config["eta"]),
+        c=float(config.get("c", 0.0)),
         v_bar=float(config["v_bar"]),
         Q0=float(config["Q_0"]),
     )
@@ -351,7 +353,7 @@ def rollout_objective(
 
         running_q2 = running_q2 + Q * Q * dt
         turnover = turnover + torch.abs(v_k) * dt
-        W = W + Q * dZ_k - params.eta * v_k * v_k * dt
+        W = W + Q * dZ_k - params.eta * v_k * v_k * dt - params.c * torch.abs(v_k) * dt
         Q = Q + v_k * dt
 
     J_path = W - params.alpha * (Q * Q) - params.phi * running_q2
@@ -384,7 +386,7 @@ def rollout_baseline_rule(
         dZ_k = Z[:, k + 1] - Z[:, k]
         running_q2 += Q * Q * dt
         turnover += np.abs(v_k) * dt
-        W += Q * dZ_k - params.eta * v_k * v_k * dt
+        W += Q * dZ_k - params.eta * v_k * v_k * dt - params.c * np.abs(v_k) * dt
         Q += v_k * dt
 
     J = W - params.alpha * (Q * Q) - params.phi * running_q2

@@ -16,9 +16,10 @@ batch_size: 4096  # training batch size
 v_bar: 5.0        # max trading rate
 
 # --- Objective penalties ---
-alpha: 10.0       # terminal liquidation penalty
-phi: 0.1          # running inventory penalty
-eta: 0.01         # market impact parameter
+alpha: 1.0        # terminal liquidation penalty (Cartea et al. 2015, Ch. 10)
+phi: 0.02         # running inventory penalty
+eta: 0.0          # market impact (zero in primary; positive for Riccati comparison)
+c: 0.002          # proportional transaction cost (bid-ask half-spread)
 
 # --- Initial conditions ---
 Q_0: 0.0          # initial inventory
@@ -99,16 +100,18 @@ phase2:
   lr_factor: 0.5
   lr_cooldown: 5
   lr_min: 1.0e-5
+  warm_restarts: 3                      # number of random inits for DNN (linear=1 always)
+  epochs_per_audition: 30               # short audition epochs per restart
 
   # Spread dynamics parameters (Chapter 6):
   #   sigma(z) = sigma_min + delta_sigma * tanh(beta * (z - mu)^2)
   #   kappa(z) = kappa0   + delta_kappa * (1 - exp(-gamma_k * (z - mu)^2))
   spread_params:
-    sigma_min: 0.10                       # baseline volatility
-    kappa0: 10.0                          # baseline mean-reversion speed
+    sigma_min: 0.20                       # baseline volatility (Cartea et al. 2015)
+    kappa0: 5.0                           # baseline mean-reversion speed (half-life ~50 days)
     mu: 0.0                               # equilibrium spread
-    delta_sigma: 0.15                     # sigma_max = 0.25 (for L2, L3)
-    delta_kappa: 15.0                     # kappa_max = 25.0 (for L2, L3)
+    delta_sigma: 0.15                     # sigma_max = 0.35 (for L2, L3)
+    delta_kappa: 7.5                      # kappa_max = 12.5 (for L2, L3)
     k_sigma: 1.5                          # activation at 1.5 s.d.
     k_kappa: 1.5                          # activation at 1.5 s.d.
 
@@ -131,10 +134,10 @@ robustness:
   perturbations:
     - label: "low_kappa"
       spread_params:
-        kappa0: 5.0                         # halved mean-reversion (default 10)
+        kappa0: 2.5                         # halved mean-reversion (default 5)
     - label: "high_sigma"
       spread_params:
-        sigma_min: 0.20                     # doubled baseline vol (default 0.10)
+        sigma_min: 0.40                     # doubled baseline vol (default 0.20)
 
 # --- Device ---
 device: "auto"  # "auto", "cpu", or "cuda"

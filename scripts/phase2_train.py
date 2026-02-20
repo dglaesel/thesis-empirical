@@ -53,6 +53,8 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--run-id", type=str, required=True,
                     help="Run identifier matching the precompute step (e.g. 20260217_190000).")
+    p.add_argument("--eta", type=float, default=None, help="Override market impact parameter.")
+    p.add_argument("--c", type=float, default=None, dest="prop_cost", help="Override proportional transaction cost.")
     p.add_argument("--force", action="store_true", help="Overwrite existing run directory contents.")
     return p.parse_args()
 
@@ -320,7 +322,7 @@ def _zscore_rollout(
         dZ = Z[:, k + 1] - Z[:, k]
         running_q2 += Q * Q * dt
         turnover += np.abs(v) * dt
-        W += Q * dZ - params.eta * v * v * dt
+        W += Q * dZ - params.eta * v * v * dt - params.c * np.abs(v) * dt
         Q += v * dt
 
     J = W - params.alpha * (Q * Q) - params.phi * running_q2
@@ -492,6 +494,16 @@ def main() -> None:
 
     feature_dtype = _dtype_from_name(str(p2["feature_dtype"]))
     params = build_phase2_params(config, level, H)
+    # CLI overrides for objective parameters (Riccati comparison uses --eta 0.001 --c 0)
+    import dataclasses
+    overrides = {}
+    if args.eta is not None:
+        overrides["eta"] = args.eta
+    if args.prop_cost is not None:
+        overrides["c"] = args.prop_cost
+    if overrides:
+        params = dataclasses.replace(params, **overrides)
+        print(f"[phase2_train] parameter overrides: {overrides}")
     device = _resolve_device(args.device)
 
     run_id = args.run_id
@@ -536,25 +548,16 @@ def main() -> None:
     print("[phase2_train] loaded via memmap")
 
     dim_n = LOGSIG_DIMS[N]
-    rng = np.random.default_rng(seed)
-    torch.manual_seed(seed)
-
-    policy = _build_policy(arch, dim_n).to(device=device, dtype=torch.float64)
     lr = float(p2["learning_rate"])
-    optimizer = torch.optim.Adam(policy.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="max",
-        factor=float(p2.get("lr_factor", 0.5)),
-        patience=int(p2.get("lr_patience", 15)),
-        cooldown=int(p2.get("lr_cooldown", 5)),
-        min_lr=float(p2.get("lr_min", 1e-5)),
-    )
     grad_clip = float(p2["grad_clip"])
     num_epochs = int(args.num_epochs) if args.num_epochs is not None else int(p2["num_epochs"])
     batch_size = int(args.batch_size) if args.batch_size is not None else int(p2["batch_size"])
     eval_every = int(args.eval_every) if args.eval_every is not None else int(p2["eval_every"])
     eval_batch_size = int(args.eval_batch_size) if args.eval_batch_size is not None else int(p2["eval_batch_size"])
+
+    # Warm restart config (DNN only — linear policy is convex, no restarts needed)
+    n_restarts = int(p2.get("warm_restarts", 3)) if arch == "adnn" else 1
+    epochs_per_audition = int(p2.get("epochs_per_audition", 30))
 
     runs_root = str(p2["runs_root"])
     run_dir = os.path.join(
@@ -580,63 +583,99 @@ def main() -> None:
     best_val_j = -float("inf")
     best_state = None
 
-    for epoch in range(1, num_epochs + 1):
-        # --- Training step: sample batch from train_sub (NOT full train pool) ---
-        batch_idx = rng.choice(train_sub_idx, size=min(batch_size, len(train_sub_idx)), replace=False)
+    def _val_j_now(policy_: torch.nn.Module) -> float:
+        """Evaluate current policy on validation set."""
         if data["mode"] == "index":
-            feat_src, z_src = data["pool_feats"], data["pool_z"]
+            vm = _eval_policy_on_indices(
+                policy=policy_, feats_mm=data["pool_feats"], z_mm=data["pool_z"],
+                indices=val_idx, dim_n=dim_n, eval_batch_size=eval_batch_size,
+                params=params, device=device)
         else:
-            feat_src, z_src = data["train_feats"], data["train_z"]
-        feat = torch.tensor(np.ascontiguousarray(feat_src[batch_idx, :, :dim_n]),
-                            dtype=torch.float64, device=device)
-        z_t = torch.tensor(np.ascontiguousarray(z_src[batch_idx, :]),
-                           dtype=torch.float64, device=device)
+            vm = _eval_policy_on_indices(
+                policy=policy_, feats_mm=data["train_feats"], z_mm=data["train_z"],
+                indices=val_idx, dim_n=dim_n, eval_batch_size=eval_batch_size,
+                params=params, device=device)
+        return float(vm["J"])
 
-        policy.train()
-        optimizer.zero_grad(set_to_none=True)
-        j_path, _ = rollout_objective(Z=z_t, features=feat, policy=policy, params=params)
-        loss = -j_path.mean()
-        if not torch.isfinite(loss):
-            raise FloatingPointError("Encountered non-finite training loss.")
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(policy.parameters(), grad_clip)
-        optimizer.step()
+    global_epoch = 0  # tracks epoch counter across restarts for curve CSV
 
-        train_j = float(j_path.mean().item())
-        val_j = float("nan")
-        if epoch == 1 or epoch % eval_every == 0 or epoch == num_epochs:
-            # --- Evaluate on VALIDATION set (not test) for scheduling & checkpointing ---
-            if data["mode"] == "index":
-                val_metrics = _eval_policy_on_indices(
-                    policy=policy,
-                    feats_mm=data["pool_feats"],
-                    z_mm=data["pool_z"],
-                    indices=val_idx,
-                    dim_n=dim_n,
-                    eval_batch_size=eval_batch_size,
-                    params=params,
-                    device=device,
-                )
+    for restart in range(n_restarts):
+        # Fresh random init for each restart
+        restart_seed = seed + restart * 1000
+        rng = np.random.default_rng(restart_seed)
+        torch.manual_seed(restart_seed)
+
+        policy = _build_policy(arch, dim_n).to(device=device, dtype=torch.float64)
+        optimizer = torch.optim.Adam(policy.parameters(), lr=lr)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="max",
+            factor=float(p2.get("lr_factor", 0.5)),
+            patience=int(p2.get("lr_patience", 15)),
+            cooldown=int(p2.get("lr_cooldown", 5)),
+            min_lr=float(p2.get("lr_min", 1e-5)),
+        )
+
+        is_final = (restart == n_restarts - 1)
+        run_epochs = num_epochs if is_final else epochs_per_audition
+
+        if n_restarts > 1:
+            if is_final:
+                print(f"[phase2_train] restart {restart+1}/{n_restarts} (FINAL — full {num_epochs} epochs)")
             else:
-                val_metrics = _eval_policy_on_indices(
-                    policy=policy,
-                    feats_mm=data["train_feats"],
-                    z_mm=data["train_z"],
-                    indices=val_idx,
-                    dim_n=dim_n,
-                    eval_batch_size=eval_batch_size,
-                    params=params,
-                    device=device,
-                )
-            val_j = float(val_metrics["J"])
-            scheduler.step(val_j)
-            if val_j > best_val_j:
-                best_val_j = val_j
-                best_state = {k: v.detach().cpu().clone() for k, v in policy.state_dict().items()}
+                print(f"[phase2_train] restart {restart+1}/{n_restarts} (audition — {run_epochs} epochs)")
 
-        curve_rows.append((epoch, train_j, val_j))
-        if epoch == 1 or epoch % eval_every == 0 or epoch == num_epochs:
-            print(f"[phase2_train] epoch={epoch}/{num_epochs} train_J={train_j:.6f} val_J={val_j:.6f}")
+        for ep in range(1, run_epochs + 1):
+            global_epoch += 1
+
+            # If this is the final restart and we're past the audition phase,
+            # load the best model found across all restarts and continue.
+            if is_final and ep == 1 and best_state is not None:
+                policy.load_state_dict(best_state)
+                # Reset optimizer and scheduler for the full run
+                optimizer = torch.optim.Adam(policy.parameters(), lr=lr)
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, mode="max",
+                    factor=float(p2.get("lr_factor", 0.5)),
+                    patience=int(p2.get("lr_patience", 15)),
+                    cooldown=int(p2.get("lr_cooldown", 5)),
+                    min_lr=float(p2.get("lr_min", 1e-5)),
+                )
+                print(f"[phase2_train] loaded best restart init (val_J={best_val_j:.6f})")
+
+            # --- Training step: sample batch from train_sub (NOT full train pool) ---
+            batch_idx = rng.choice(train_sub_idx, size=min(batch_size, len(train_sub_idx)), replace=False)
+            if data["mode"] == "index":
+                feat_src, z_src = data["pool_feats"], data["pool_z"]
+            else:
+                feat_src, z_src = data["train_feats"], data["train_z"]
+            feat = torch.tensor(np.ascontiguousarray(feat_src[batch_idx, :, :dim_n]),
+                                dtype=torch.float64, device=device)
+            z_t = torch.tensor(np.ascontiguousarray(z_src[batch_idx, :]),
+                               dtype=torch.float64, device=device)
+
+            policy.train()
+            optimizer.zero_grad(set_to_none=True)
+            j_path, _ = rollout_objective(Z=z_t, features=feat, policy=policy, params=params)
+            loss = -j_path.mean()
+            if not torch.isfinite(loss):
+                raise FloatingPointError("Encountered non-finite training loss.")
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), grad_clip)
+            optimizer.step()
+
+            train_j = float(j_path.mean().item())
+            val_j = float("nan")
+            if ep == 1 or ep % eval_every == 0 or ep == run_epochs:
+                val_j = _val_j_now(policy)
+                scheduler.step(val_j)
+                if val_j > best_val_j:
+                    best_val_j = val_j
+                    best_state = {k: v.detach().cpu().clone() for k, v in policy.state_dict().items()}
+
+            curve_rows.append((global_epoch, train_j, val_j))
+            if ep == 1 or ep % eval_every == 0 or ep == run_epochs:
+                print(f"[phase2_train] epoch={global_epoch} (r{restart+1} e{ep}/{run_epochs}) "
+                      f"train_J={train_j:.6f} val_J={val_j:.6f}")
 
     with open(curve_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -740,8 +779,8 @@ def main() -> None:
         ),
     }
 
-    # HJB Riccati baseline — only valid for H=0.5 with constant coefficients (L1)
-    if abs(H - 0.5) < 1e-9 and level == "L1":
+    # HJB Riccati baseline — only valid for H=0.5 with constant coefficients (L1) and eta>0
+    if abs(H - 0.5) < 1e-9 and level == "L1" and params.eta > 1e-12:
         try:
             from src.hjb_pairs import solve_hjb_riccati, optimal_control
             sol = solve_hjb_riccati(
@@ -761,7 +800,7 @@ def main() -> None:
                 dZ_k = z_test[:, k + 1] - z_test[:, k]
                 rq2_hjb += Q_hjb * Q_hjb * dt
                 turn_hjb += np.abs(v_k) * dt
-                W_hjb += Q_hjb * dZ_k - params.eta * v_k * v_k * dt
+                W_hjb += Q_hjb * dZ_k - params.eta * v_k * v_k * dt - params.c * np.abs(v_k) * dt
                 Q_hjb += v_k * dt
             J_hjb = W_hjb - params.alpha * (Q_hjb * Q_hjb) - params.phi * rq2_hjb
             baseline["HJB_Riccati"] = {
@@ -789,6 +828,9 @@ def main() -> None:
         "device": str(device),
         "feature_dir": feature_dir,
         "run_dir": run_dir,
+        "n_restarts": n_restarts,
+        "epochs_per_audition": epochs_per_audition if n_restarts > 1 else None,
+        "total_epochs": global_epoch,
         "n_train": len(train_sub_idx),
         "n_val": len(val_idx),
         "n_test": _n_test,
@@ -823,7 +865,8 @@ def main() -> None:
         config_path=args.config,
     )
 
-    print(f"[phase2_train] done. val_J={val_metrics_final['J']:.6f} test_J={test_metrics['J']:.6f}, elapsed={elapsed:.1f}s")
+    print(f"[phase2_train] done. val_J={val_metrics_final['J']:.6f} test_J={test_metrics['J']:.6f}, "
+          f"restarts={n_restarts}, total_epochs={global_epoch}, elapsed={elapsed:.1f}s")
     print(f"[phase2_train] outputs: {run_dir}")
 
 

@@ -34,7 +34,7 @@ def _make_const_params(**overrides) -> Phase2Params:
         sigma_min=0.10, delta_sigma=0.0, beta=1.0,
         kappa0=10.0, delta_kappa=0.0, gamma_k=1.0,
         mu=0.0, T=1.0, K=500,
-        alpha=10.0, phi=0.1, eta=0.01, v_bar=5.0, Q0=0.0,
+        alpha=10.0, phi=0.1, eta=0.01, c=0.0, v_bar=5.0, Q0=0.0,
     )
     defaults.update(overrides)
     return Phase2Params(**defaults)
@@ -46,7 +46,7 @@ def _make_sd_params(**overrides) -> Phase2Params:
         sigma_min=0.10, delta_sigma=0.15, beta=50.0,
         kappa0=10.0, delta_kappa=15.0, gamma_k=50.0,
         mu=0.0, T=1.0, K=500,
-        alpha=10.0, phi=0.1, eta=0.01, v_bar=5.0, Q0=0.0,
+        alpha=10.0, phi=0.1, eta=0.01, c=0.0, v_bar=5.0, Q0=0.0,
     )
     defaults.update(overrides)
     return Phase2Params(**defaults)

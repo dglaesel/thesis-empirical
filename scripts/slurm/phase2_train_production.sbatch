@@ -5,12 +5,13 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=22
 #SBATCH --mem=128G
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=results/slurm/train_%j.out
 #SBATCH --error=results/slurm/train_%j.err
 
-# Phase 2 training — all (level, H, N, arch, seed) combinations.
-# 600 total jobs, 20 concurrent. Estimated ~8-10 hours.
+# Phase 2 training — one level per job (200 tasks, 20 concurrent).
+# Submit three times:  LEVEL=L1  LEVEL=L2  LEVEL=L3
+# DNN tasks use warm restarts (3 inits × 30-epoch audition + full training).
 
 set -euo pipefail
 
@@ -31,6 +32,14 @@ CONFIG_PATH=${CONFIG_PATH:-config/default.yaml}
 RUN_ID=${RUN_ID:?ERROR: set RUN_ID before submitting}
 SPLIT_MODE=${SPLIT_MODE:-index}
 MAX_PARALLEL=${MAX_PARALLEL:-20}
+LEVEL=${LEVEL:?ERROR: set LEVEL (L1, L2, or L3) before submitting}
+
+declare -A INTEGRATOR_MAP=( [L1]=exact [L2]=milstein [L3]=milstein )
+INTEGRATOR=${INTEGRATOR_MAP[$LEVEL]}
+if [[ -z "${INTEGRATOR}" ]]; then
+  echo "ERROR: invalid LEVEL=${LEVEL}. Must be L1, L2, or L3."
+  exit 1
+fi
 
 mkdir -p results/slurm
 
@@ -39,41 +48,36 @@ N_LIST=(1 2 3 4)
 SEED_LIST=(0 1 2 3 4)
 ARCH_LIST=(alin adnn)
 
-declare -A INTEGRATOR_MAP=( [L1]=exact [L2]=milstein [L3]=milstein )
-LEVEL_LIST=(L1 L2 L3)
-
 RUNNING=0
 FAIL=0
 TOTAL=0
 
-for LEVEL in "${LEVEL_LIST[@]}"; do
-  INTEGRATOR=${INTEGRATOR_MAP[$LEVEL]}
-  for H in "${H_LIST[@]}"; do
-    for SEED in "${SEED_LIST[@]}"; do
-      for N in "${N_LIST[@]}"; do
-        for ARCH in "${ARCH_LIST[@]}"; do
-          (
-            echo "[train] level=${LEVEL} H=${H} seed=${SEED} N=${N} arch=${ARCH}"
-            python scripts/phase2_train.py \
-              --config "${CONFIG_PATH}" \
-              --level "${LEVEL}" \
-              --H "${H}" \
-              --seed "${SEED}" \
-              --N "${N}" \
-              --arch "${ARCH}" \
-              --integrator "${INTEGRATOR}" \
-              --split-mode "${SPLIT_MODE}" \
-              --run-id "${RUN_ID}" \
-              --device "cpu"
-          ) &
+for H in "${H_LIST[@]}"; do
+  for SEED in "${SEED_LIST[@]}"; do
+    for N in "${N_LIST[@]}"; do
+      for ARCH in "${ARCH_LIST[@]}"; do
+        (
+          echo "[train] level=${LEVEL} H=${H} seed=${SEED} N=${N} arch=${ARCH}"
+          python scripts/phase2_train.py \
+            --config "${CONFIG_PATH}" \
+            --level "${LEVEL}" \
+            --H "${H}" \
+            --seed "${SEED}" \
+            --N "${N}" \
+            --arch "${ARCH}" \
+            --integrator "${INTEGRATOR}" \
+            --split-mode "${SPLIT_MODE}" \
+            --run-id "${RUN_ID}" \
+            --device "cpu" \
+            --force
+        ) &
 
-          RUNNING=$(( RUNNING + 1 ))
-          TOTAL=$(( TOTAL + 1 ))
-          if (( RUNNING >= MAX_PARALLEL )); then
-            wait -n || FAIL=$(( FAIL + 1 ))
-            RUNNING=$(( RUNNING - 1 ))
-          fi
-        done
+        RUNNING=$(( RUNNING + 1 ))
+        TOTAL=$(( TOTAL + 1 ))
+        if (( RUNNING >= MAX_PARALLEL )); then
+          wait -n || FAIL=$(( FAIL + 1 ))
+          RUNNING=$(( RUNNING - 1 ))
+        fi
       done
     done
   done
@@ -81,7 +85,7 @@ done
 
 wait || FAIL=$(( FAIL + 1 ))
 
-echo "[train] completed ${TOTAL} jobs, ${FAIL} failed"
+echo "[train] ${LEVEL}: completed ${TOTAL} jobs, ${FAIL} failed"
 if (( FAIL > 0 )); then
   exit 1
 fi

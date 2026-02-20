@@ -23,7 +23,7 @@ import numpy as np
 
 # ---------- expected constants (from config/default.yaml) ----------
 M = 131_072
-K = 1000
+K = 500
 LOGSIG_DIM_N4 = 8          # iisignature logsig dim for d=2, N=4
 INTEGRATOR = {"L1": "exact", "L2": "milstein", "L3": "milstein"}
 H_TAGS = [

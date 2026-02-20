@@ -9,7 +9,7 @@
 #SBATCH --output=results/slurm/precompute_%j.out
 #SBATCH --error=results/slurm/precompute_%j.err
 
-# Phase 2 precompute — all (level, H, seed) combinations.
+# Phase 2 precompute — all (level, H, seed) combinations (75 tasks).
 # Each Python process is single-threaded (~6-7 GB each); 8 concurrent.
 
 set -euo pipefail
