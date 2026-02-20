@@ -3,14 +3,14 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=90
+#SBATCH --cpus-per-task=22
 #SBATCH --mem=128G
 #SBATCH --time=12:00:00
 #SBATCH --output=results/slurm/train_%j.out
 #SBATCH --error=results/slurm/train_%j.err
 
-# Phase 2 training — all (level, H, N, arch, seed) on a single 96-core node.
-# 600 total jobs, ~90 concurrent. Estimated ~6-7 hours.
+# Phase 2 training — all (level, H, N, arch, seed) combinations.
+# 600 total jobs, 20 concurrent. Estimated ~8-10 hours.
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ export NUMEXPR_NUM_THREADS=1
 CONFIG_PATH=${CONFIG_PATH:-config/default.yaml}
 RUN_ID=${RUN_ID:?ERROR: set RUN_ID before submitting}
 SPLIT_MODE=${SPLIT_MODE:-index}
-MAX_PARALLEL=${MAX_PARALLEL:-90}
+MAX_PARALLEL=${MAX_PARALLEL:-20}
 
 mkdir -p results/slurm
 

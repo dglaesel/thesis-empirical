@@ -3,8 +3,8 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
 #SBATCH --time=04:00:00
 #SBATCH --output=results/slurm/robustness_%j.out
 #SBATCH --error=results/slurm/robustness_%j.err
@@ -12,7 +12,7 @@
 # Phase 2 robustness check — perturbed spread parameters.
 # Two perturbations x 2 H x 2 N x 1 arch x 3 seeds x 1 level = 24 training jobs.
 # Precompute: 2 perturbations x 2 H x 3 seeds = 12 jobs.
-# Total: 36 jobs. Estimated < 2 hours on 96 cores.
+# Total: 36 jobs. 6 concurrent, estimated < 2 hours.
 
 set -euo pipefail
 
@@ -31,7 +31,7 @@ export NUMEXPR_NUM_THREADS=1
 
 RUN_ID=${RUN_ID:?ERROR: set RUN_ID before submitting}
 SPLIT_MODE=${SPLIT_MODE:-index}
-MAX_PARALLEL=${MAX_PARALLEL:-90}
+MAX_PARALLEL=${MAX_PARALLEL:-6}
 
 mkdir -p results/slurm
 

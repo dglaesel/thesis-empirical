@@ -3,8 +3,8 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=200G
+#SBATCH --cpus-per-task=12
+#SBATCH --mem=80G
 #SBATCH --time=06:00:00
 #SBATCH --output=results/slurm/phase1_%j.out
 #SBATCH --error=results/slurm/phase1_%j.err
@@ -54,7 +54,7 @@ for H in "${H_LIST[@]}"; do
 
       RUNNING=$(( RUNNING + 1 ))
       TOTAL=$(( TOTAL + 1 ))
-      if (( RUNNING >= 15 )); then
+      if (( RUNNING >= 10 )); then
         wait -n || FAIL=$(( FAIL + 1 ))
         RUNNING=$(( RUNNING - 1 ))
       fi
