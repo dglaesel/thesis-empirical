@@ -1,13 +1,14 @@
-# Robustness check: halved mean-reversion speed (kappa0 = 5 vs default 10)
-# Subset grid: H in {0.125, 0.375}, N in {2, 4}, seeds 0-2, L1 only, A_dnn
+# Robustness check: halved mean-reversion speed (kappa0 = 2.5 vs default 5.0)
+# Subset grid: H in {0.25, 0.5}, N in {2, 4}, seeds 0-2, L1 only, A_dnn
 
 # Top-level keys inherited from default.yaml (phase2_train reads these)
 T: 1.0
 K: 500
 v_bar: 5.0
-alpha: 10.0
-phi: 0.1
-eta: 0.01
+alpha: 1.0
+phi: 0.02
+eta: 0.0
+c: 0.002
 Q_0: 0.0
 Z_0: 0.0
 
@@ -27,7 +28,7 @@ phase2:
   output_root: "results/phase2"
   features_root: "results/phase2/features"
   runs_root: "results/phase2/runs"
-  H_values: [0.125, 0.375]
+  H_values: [0.25, 0.5]
   N_values: [2, 4]
   seeds: [0, 1, 2]
   architectures: ["A_dnn"]
@@ -44,11 +45,11 @@ phase2:
   lr_min: 1.0e-5
 
   spread_params:
-    sigma_min: 0.10
-    kappa0: 5.0                             # <-- PERTURBED (default: 10.0)
+    sigma_min: 0.20
+    kappa0: 2.5                             # <-- PERTURBED (default: 5.0)
     mu: 0.0
     delta_sigma: 0.15
-    delta_kappa: 15.0
+    delta_kappa: 7.5
     k_sigma: 1.5
     k_kappa: 1.5
 

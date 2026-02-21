@@ -39,7 +39,7 @@ mkdir -p results/slurm
 declare -a CONFIGS=("config/robustness_low_kappa.yaml" "config/robustness_high_sigma.yaml")
 declare -a LABELS=("low_kappa" "high_sigma")
 
-H_LIST=(0.125 0.375)
+H_LIST=(0.25 0.5)
 N_LIST=(2 4)
 SEED_LIST=(0 1 2)
 LEVEL=L1
